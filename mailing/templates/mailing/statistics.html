@@ -1,0 +1,39 @@
+{% extends 'mailing/base.html' %}
+{% block title %}Статистика{% endblock %}
+{% block content %}
+<h1>📊 Статистика</h1>
+<div class="row mt-4">
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2>{{ total_attempts }}</h2>
+                <p>Всего попыток</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2 class="text-success">{{ success_attempts }}</h2>
+                <p>Успешных</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2 class="text-danger">{{ failed_attempts }}</h2>
+                <p>Неуспешных</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2>{{ total_messages }}</h2>
+                <p>Отправлено сообщений</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends 'mailing/base.html' %}
+{% block title %}Рассылка #{{ mailing.id }}{% endblock %}
+{% block content %}
+<h1>📨 Рассылка #{{ mailing.id }}</h1>
+<table class="table table-striped mt-4">
+    <tr><th style="width: 200px;">Сообщение</th><td>{{ mailing.message.subject }}</td></tr>
+    <tr><th>Статус</th><td><span class="badge bg-info">{{ mailing.get_status_display }}</span></td></tr>
+    <tr><th>Начало</th><td>{{ mailing.start_time|date:"d.m.Y H:i" }}</td></tr>
+    <tr><th>Конец</th><td>{{ mailing.end_time|date:"d.m.Y H:i" }}</td></tr>
+    <tr>
+        <th>Получатели</th>
+        <td>
+            {% for client in mailing.recipients.all %}
+                {{ client.email }}{% if not forloop.last %}, {% endif %}
+            {% empty %}
+                <span class="text-muted">Нет получателей</span>
+            {% endfor %}
+        </td>
+    </tr>
+</table>
+<div class="mt-3">
+    <a href="{% url 'mailing:mailing_list' %}" class="btn btn-secondary">← Назад</a>
+    <form method="post" action="{% url 'mailing:mailing_send' mailing.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">📤 Отправить</button>
+    </form>
+</div>
+{% endblock %}

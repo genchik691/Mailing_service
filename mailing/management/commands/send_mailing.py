@@ -12,5 +12,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         mailing_id = options['mailing_id']
         self.stdout.write(f"📨 Запуск рассылки #{mailing_id}...")
-        send_mailing(mailing_id)
-        self.stdout.write(self.style.SUCCESS("✅ Готово"))
+        try:
+            send_mailing(mailing_id)
+            self.stdout.write(self.style.SUCCESS("✅ Готово"))
+        except ValueError as e:
+            self.stdout.write(self.style.ERROR(f"❌ {e}"))

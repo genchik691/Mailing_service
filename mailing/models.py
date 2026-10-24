@@ -1,11 +1,17 @@
 # mailing/models.py
 from django.db import models
+from django.utils import timezone
+from django.contrib.auth.models import AbstractUser
 
 
 class Client(models.Model):
     email = models.EmailField(unique=True, verbose_name='Email')
     full_name = models.CharField(max_length=255, verbose_name='Ф. И. О.')
     comment = models.TextField(blank=True, null=True, verbose_name='Комментарий')
+    owner = models.ForeignKey(
+        'mailing.User', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='clients', verbose_name='Владелец'
+    )
 
     class Meta:
         verbose_name = 'Получатель'
@@ -42,6 +48,10 @@ class Mailing(models.Model):
     )
     message = models.ForeignKey(Message, on_delete=models.CASCADE, verbose_name='Сообщение')
     recipients = models.ManyToManyField(Client, verbose_name='Получатели')
+    owner = models.ForeignKey(
+        'mailing.User', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='mailings', verbose_name='Владелец'
+    )
 
     class Meta:
         verbose_name = 'Рассылка'
@@ -49,6 +59,19 @@ class Mailing(models.Model):
 
     def __str__(self):
         return f"Рассылка #{self.id} — {self.message.subject}"
+
+    def update_status(self):
+        now = timezone.now()
+        if now < self.start_time:
+            new_status = 'created'
+        elif self.start_time <= now <= self.end_time:
+            new_status = 'started'
+        else:
+            new_status = 'completed'
+        if self.status != new_status:
+            self.status = new_status
+            self.save(update_fields=['status'])
+        return self.status
 
 
 class MailingAttempt(models.Model):
@@ -71,3 +94,18 @@ class MailingAttempt(models.Model):
 
     def __str__(self):
         return f"Попытка #{self.id} — {self.get_status_display()}"
+
+
+class User(AbstractUser):
+    email = models.EmailField(unique=True, verbose_name='Email')
+    is_email_confirmed = models.BooleanField(default=False, verbose_name='Email подтверждён')
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
+    class Meta:
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
+
+    def __str__(self):
+        return self.email

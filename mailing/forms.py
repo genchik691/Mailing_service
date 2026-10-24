@@ -1,6 +1,8 @@
 # mailing/forms.py
 from django import forms
-from .models import Client, Message, Mailing
+from django.utils import timezone
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from .models import Client, Message, Mailing, User
 
 
 class ClientForm(forms.ModelForm):
@@ -35,3 +37,52 @@ class MailingForm(forms.ModelForm):
             'message': forms.Select(attrs={'class': 'form-control'}),
             'recipients': forms.SelectMultiple(attrs={'class': 'form-control', 'size': 10}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+
+        # ✅ start_time не может быть в прошлом
+        if start_time and start_time < timezone.now():
+            raise forms.ValidationError('Дата начала не может быть в прошлом.')
+
+        # ✅ start_time должен быть раньше end_time
+        if start_time and end_time and start_time >= end_time:
+            raise forms.ValidationError('Дата начала должна быть раньше даты окончания.')
+
+        return cleaned_data
+
+
+class UserRegisterForm(UserCreationForm):
+    email = forms.EmailField(
+        label='Email',
+        widget=forms.EmailInput(attrs={'class': 'form-control'})
+    )
+    username = forms.CharField(
+        label='Имя пользователя',
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    password1 = forms.CharField(
+        label='Пароль',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'})
+    )
+    password2 = forms.CharField(
+        label='Подтверждение пароля',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'})
+    )
+
+    class Meta:
+        model = User
+        fields = ('email', 'username', 'password1', 'password2')
+
+
+class UserLoginForm(AuthenticationForm):
+    username = forms.EmailField(
+        label='Email',
+        widget=forms.EmailInput(attrs={'class': 'form-control'})
+    )
+    password = forms.CharField(
+        label='Пароль',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'})
+    )

@@ -1,11 +1,12 @@
 # mailing/admin.py
 from django.contrib import admin
-from .models import Client, Message, Mailing, MailingAttempt
+from django.contrib.auth.admin import UserAdmin
+from .models import Client, Message, Mailing, MailingAttempt, User
 
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ('email', 'full_name')
+    list_display = ('email', 'full_name', 'owner')
     search_fields = ('email', 'full_name')
 
 
@@ -16,7 +17,7 @@ class MessageAdmin(admin.ModelAdmin):
 
 @admin.register(Mailing)
 class MailingAdmin(admin.ModelAdmin):
-    list_display = ('id', 'message', 'status', 'start_time', 'end_time')
+    list_display = ('id', 'message', 'status', 'start_time', 'end_time', 'owner')
     list_filter = ('status',)
 
 
@@ -24,3 +25,12 @@ class MailingAdmin(admin.ModelAdmin):
 class MailingAttemptAdmin(admin.ModelAdmin):
     list_display = ('id', 'mailing', 'status', 'attempt_time')
     list_filter = ('status',)
+
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    model = User
+    list_display = ('email', 'username', 'is_email_confirmed', 'is_staff')
+    fieldsets = UserAdmin.fieldsets + (
+        ('Дополнительно', {'fields': ('is_email_confirmed',)}),
+    )
