@@ -8,12 +8,36 @@ from django.http import HttpResponse
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.core.exceptions import PermissionDenied
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from .models import Client, Message, Mailing, MailingAttempt, User
 from .forms import ClientForm, MessageForm, MailingForm, UserRegisterForm, UserLoginForm
 from .services import send_mailing, send_confirmation_email
+
+
+# ✅ Миксин: фильтрация queryset по владельцу
+class OwnerQuerysetMixin:
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(name='Менеджеры').exists():
+            return queryset
+        return queryset.filter(owner=user)
+
+
+# ✅ Миксин: доступ только владельцу/менеджеру
+class OwnerOrManagerMixin(UserPassesTestMixin):
+    raise_exception = True
+
+    def test_func(self):
+        obj = self.get_object()
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(name='Менеджеры').exists():
+            return True
+        return obj.owner == user
 
 
 @method_decorator(cache_page(60 * 5), name='dispatch')
@@ -28,29 +52,12 @@ class HomeView(TemplateView):
         return context
 
 
-class OwnerOrManagerMixin(UserPassesTestMixin):
-    raise_exception = True
-
-    def test_func(self):
-        obj = self.get_object()
-        user = self.request.user
-        if user.is_superuser or user.groups.filter(name='Менеджеры').exists():
-            return True
-        return obj.owner == user
-
-
 # ===== Client CRUD =====
-class ClientListView(LoginRequiredMixin, ListView):
+class ClientListView(LoginRequiredMixin, OwnerQuerysetMixin, ListView):
     model = Client
     template_name = 'mailing/client_list.html'
     context_object_name = 'client_list'
     login_url = 'mailing:login'
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser or user.groups.filter(name='Менеджеры').exists():
-            return Client.objects.all()
-        return Client.objects.filter(owner=user)
 
 
 class ClientCreateView(LoginRequiredMixin, CreateView):
@@ -81,7 +88,7 @@ class ClientDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
 
 
 # ===== Message CRUD =====
-class MessageListView(LoginRequiredMixin, ListView):
+class MessageListView(LoginRequiredMixin, OwnerQuerysetMixin, ListView):
     model = Message
     template_name = 'mailing/message_list.html'
     context_object_name = 'message_list'
@@ -95,8 +102,12 @@ class MessageCreateView(LoginRequiredMixin, CreateView):
     success_url = reverse_lazy('mailing:message_list')
     login_url = 'mailing:login'
 
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        return super().form_valid(form)
 
-class MessageUpdateView(LoginRequiredMixin, UpdateView):
+
+class MessageUpdateView(LoginRequiredMixin, OwnerOrManagerMixin, UpdateView):
     model = Message
     form_class = MessageForm
     template_name = 'mailing/message_form.html'
@@ -104,7 +115,7 @@ class MessageUpdateView(LoginRequiredMixin, UpdateView):
     login_url = 'mailing:login'
 
 
-class MessageDeleteView(LoginRequiredMixin, DeleteView):
+class MessageDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
     model = Message
     template_name = 'mailing/message_confirm_delete.html'
     success_url = reverse_lazy('mailing:message_list')
@@ -112,26 +123,20 @@ class MessageDeleteView(LoginRequiredMixin, DeleteView):
 
 
 # ===== Mailing CRUD =====
-class MailingListView(LoginRequiredMixin, ListView):
+class MailingListView(LoginRequiredMixin, OwnerQuerysetMixin, ListView):
     model = Mailing
     template_name = 'mailing/mailing_list.html'
     context_object_name = 'mailing_list'
     login_url = 'mailing:login'
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser or user.groups.filter(name='Менеджеры').exists():
-            mailings = Mailing.objects.all()
-        else:
-            mailings = Mailing.objects.filter(owner=user)
-
-        for mailing in mailings:
+        queryset = super().get_queryset()
+        for mailing in queryset:
             mailing.update_status()
+        return queryset
 
-        return mailings
 
-
-class MailingDetailView(LoginRequiredMixin, DetailView):
+class MailingDetailView(LoginRequiredMixin, OwnerQuerysetMixin, DetailView):
     model = Mailing
     template_name = 'mailing/mailing_detail.html'
     context_object_name = 'mailing'
@@ -170,16 +175,24 @@ class MailingDeleteView(LoginRequiredMixin, OwnerOrManagerMixin, DeleteView):
     login_url = 'mailing:login'
 
 
-# ===== Отправка =====
+# ✅ Отправка — только авторизованный владелец или суперпользователь
+@login_required
+@require_POST
 def send_mailing_view(request, pk):
-    if request.method == 'POST':
-        try:
-            send_mailing(pk)
-            messages.success(request, f'Рассылка #{pk} отправлена')
-        except ValueError as e:
-            messages.error(request, str(e))
-        except Exception as e:
-            messages.error(request, f'Ошибка: {e}')
+    queryset = Mailing.objects.all()
+    if not request.user.is_superuser:
+        queryset = queryset.filter(owner=request.user)
+
+    mailing = get_object_or_404(queryset, pk=pk)
+
+    try:
+        send_mailing(mailing.pk)
+        messages.success(request, f'Рассылка #{pk} отправлена')
+    except ValueError as error:
+        messages.error(request, str(error))
+    except Exception as error:
+        messages.error(request, f'Ошибка: {error}')
+
     return redirect('mailing:mailing_list')
 
 
@@ -191,22 +204,30 @@ class RegisterView(CreateView):
     success_url = reverse_lazy('mailing:login')
 
     def form_valid(self, form):
+        form.instance.is_active = False  # ✅ неактивен до подтверждения
         response = super().form_valid(form)
-        user = self.object
-        user.is_active = True
-        user.save()
-        send_confirmation_email(user, self.request)
-        messages.success(self.request, 'Регистрация успешна! Проверьте email.')
+        send_confirmation_email(self.object, self.request)
+        messages.success(self.request, 'Проверьте почту и подтвердите регистрацию.')
         return response
 
 
 def confirm_email(request, token):
-    user = get_object_or_404(User, pk=token)
-    if not user.is_email_confirmed:
-        user.is_email_confirmed = True
-        user.save()
-        return HttpResponse('<h1>✅ Email подтверждён!</h1><a href="/login/">Войти</a>')
-    return HttpResponse('<h1>Email уже подтверждён</h1><a href="/login/">Войти</a>')
+    from django.core import signing
+    from django.core.signing import BadSignature, SignatureExpired
+
+    try:
+        user_id = signing.loads(token, max_age=86400)  # 24 часа
+    except SignatureExpired:
+        return HttpResponse('<h1>❌ Ссылка истекла</h1><a href="/login/">Войти</a>')
+    except BadSignature:
+        return HttpResponse('<h1>❌ Неверная ссылка</h1><a href="/login/">Войти</a>')
+
+    user = get_object_or_404(User, pk=user_id)
+    user.is_active = True
+    user.is_email_confirmed = True
+    user.save()
+
+    return HttpResponse('<h1>✅ Email подтверждён!</h1><a href="/login/">Войти</a>')
 
 
 class UserLoginView(LoginView):
@@ -291,6 +312,6 @@ def toggle_mailing(request, pk):
         else:
             mailing.status = 'started'
         mailing.save()
-        messages.success(request, f'Статус рассылки #{mailing.pk} изменён на «{mailing.get_status_display()}»')
+        messages.success(request, f'Статус рассылки #{mailing.pk} изменён')
 
     return redirect('mailing:mailing_list')

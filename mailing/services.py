@@ -3,6 +3,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from .models import Mailing, MailingAttempt
+from django.core import signing
 
 
 def send_mailing(mailing_id):
@@ -43,11 +44,14 @@ def send_mailing(mailing_id):
 
 
 def send_confirmation_email(user, request):
-    token = user.pk
+    """Отправляет письмо с подписанным токеном подтверждения."""
+    token = signing.dumps(user.pk)
     confirm_url = request.build_absolute_uri(f'/confirm-email/{token}/')
     send_mail(
         subject='Подтверждение email',
-        message=f'Здравствуйте, {user.username}!\n\nПодтвердите email:\n{confirm_url}',
+        message=f'Здравствуйте, {user.username}!\n\n'
+                f'Подтвердите ваш email, перейдя по ссылке:\n{confirm_url}\n\n'
+                f'Ссылка действует 24 часа.',
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
         fail_silently=False,

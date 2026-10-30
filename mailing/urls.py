@@ -41,7 +41,7 @@ urlpatterns = [
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', views.UserLoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(next_page='mailing:home'), name='logout'),
-    path('confirm-email/<int:token>/', views.confirm_email, name='confirm_email'),
+    path('confirm-email/<str:token>/', views.confirm_email, name='confirm_email'),
 
     # Password reset
     path('password-reset/',

@@ -24,6 +24,13 @@ class Client(models.Model):
 class Message(models.Model):
     subject = models.CharField(max_length=255, verbose_name='Тема письма')
     body = models.TextField(verbose_name='Тело письма')
+    owner = models.ForeignKey(
+        'mailing.User',
+        on_delete=models.CASCADE,
+        related_name='messages',
+        verbose_name='Владелец',
+        null=True, blank=True,
+    )
 
     class Meta:
         verbose_name = 'Сообщение'
