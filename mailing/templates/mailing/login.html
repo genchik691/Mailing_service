@@ -1,0 +1,21 @@
+{% extends 'mailing/base.html' %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<h1>🔐 Вход</h1>
+<form method="post" class="mt-4">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger">Неверный email или пароль</div>
+    {% endif %}
+    {% for field in form %}
+    <div class="mb-3">
+        <label class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-success">Войти</button>
+    <a href="{% url 'mailing:register' %}" class="btn btn-secondary">Регистрация</a>
+    <a href="{% url 'mailing:password_reset' %}" class="btn btn-link">Забыли пароль?</a>
+</form>
+{% endblock %}
